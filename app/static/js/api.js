@@ -41,6 +41,19 @@ const API = {
     return this.req('/api/artists');
   },
 
+  getArtist(name) {
+    return this.req(`/api/artists/${encodeURIComponent(name)}`);
+  },
+
+  getSimilarTracks(trackId) {
+    return this.req(`/api/tracks/${trackId}/similar`);
+  },
+
+  getRecommendations(params = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.req(`/api/recommendations?${q}`);
+  },
+
   getAlbums() {
     return this.req('/api/albums');
   },

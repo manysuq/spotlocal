@@ -105,6 +105,37 @@ const App = {
       fsPlayer?.classList.remove('open');
     });
 
+    // Artist navigation from player bars
+    document.getElementById('player-artist')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (Player.currentTrack?.artist) this.openArtist(Player.currentTrack.artist);
+    });
+    document.getElementById('mini-artist')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (Player.currentTrack?.artist) this.openArtist(Player.currentTrack.artist);
+    });
+    document.getElementById('fs-artist')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('mobile-fullscreen-player')?.classList.remove('open');
+      if (Player.currentTrack?.artist) this.openArtist(Player.currentTrack.artist);
+    });
+
+    // Similar tracks buttons in players
+    document.getElementById('player-similar-btn')?.addEventListener('click', () => {
+      if (Player.currentTrack?.id) {
+        this.openSimilarModal(Player.currentTrack.id);
+      } else {
+        this.showToast('Сначала выберите трек для воспроизведения');
+      }
+    });
+    document.getElementById('fs-similar-btn')?.addEventListener('click', () => {
+      if (Player.currentTrack?.id) {
+        this.openSimilarModal(Player.currentTrack.id);
+      } else {
+        this.showToast('Сначала выберите трек для воспроизведения');
+      }
+    });
+
     // Library Rescan button
     document.getElementById('btn-rescan')?.addEventListener('click', async () => {
       const btn = document.getElementById('btn-rescan');
@@ -339,10 +370,38 @@ const App = {
             <button class="btn-primary" onclick="App.navigate('downloader')">Перейти в Загрузчик</button>
           </div>
         ` : this.renderTrackTable(tracks)}
+        <div id="home-recommendations-area"></div>
       </div>
     `;
 
     container.innerHTML = quickHtml + tracksTableHtml;
+
+    if (tracks.length > 0) {
+      setTimeout(async () => {
+        try {
+          const recArea = document.getElementById('home-recommendations-area');
+          if (!recArea) return;
+          const recData = await API.getRecommendations();
+          if (recData && recData.similar_tracks && recData.similar_tracks.length > 0) {
+            recArea.innerHTML = `
+              <div style="margin-top: 16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                  <div>
+                    <h2 class="section-title" style="font-size:1.25rem;">Вам может понравиться</h2>
+                    <div style="color:var(--text-subdued); font-size:0.85rem;">Похожие треки на основе вашей медиатеки</div>
+                  </div>
+                </div>
+                <div class="similar-card-list">
+                  ${recData.similar_tracks.slice(0, 6).map(st => App.renderSimilarTrackRow(st)).join('')}
+                </div>
+              </div>
+            `;
+          }
+        } catch (e) {
+          // ignore error in background recommendation fetch
+        }
+      }, 50);
+    }
   },
 
   async renderSearch(container) {
@@ -649,29 +708,139 @@ const App = {
   },
 
   async openArtist(artistName) {
+    if (!artistName) return;
     this.navigate('artist', artistName);
   },
 
   async renderArtist(container, artistName) {
-    container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">Загрузка...</div>`;
-    const tracks = await API.getTracks({ artist: artistName });
-    this.activeTracks = tracks;
+    container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">Загрузка профиля артиста...</div>`;
+    
+    let data;
+    try {
+      data = await API.getArtist(artistName);
+    } catch (e) {
+      const local = await API.getTracks({ artist: artistName });
+      data = {
+        artist: artistName,
+        local_tracks: local,
+        local_albums: [],
+        similar_artists: [],
+        similar_tracks: []
+      };
+    }
+
+    const localTracks = data.local_tracks || [];
+    this.activeTracks = localTracks;
+    const totalSec = localTracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+
+    const avatarHtml = data.avatar_url 
+      ? `<img src="${data.avatar_url}" class="artist-avatar-img" alt="${this.escapeHtml(artistName)}" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#282828;\\'><svg viewBox=\\'0 0 24 24\\' width=\\'70\\' height=\\'70\\' fill=\\'var(--text-subdued)\\'><path d=\\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\\'/></svg></div>'" />`
+      : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#282828;">
+           <svg viewBox="0 0 24 24" width="70" height="70" fill="var(--text-subdued)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+         </div>`;
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 24px;">
-        <div style="display: flex; align-items: flex-end; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid #282828;">
-          <div style="width: 140px; height: 140px; border-radius: 50%; background: #282828; display:flex; align-items:center; justify-content:center; box-shadow: 0 12px 32px rgba(0,0,0,0.5);">
-            <svg viewBox="0 0 24 24" width="64" height="64" fill="var(--text-subdued)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 28px;">
+        <!-- ARTIST HERO -->
+        <div class="artist-hero">
+          <div class="artist-avatar-wrap">
+            ${avatarHtml}
           </div>
-          <div>
-            <div style="text-transform: uppercase; font-size: 0.75rem; font-weight: 700; margin-bottom: 6px;">Исполнитель</div>
-            <h1 style="font-size: 2.5rem; font-weight: 900; margin-bottom: 8px;">${this.escapeHtml(artistName)}</h1>
-            <div style="color: var(--text-subdued); font-size: 0.9rem;">${tracks.length} треков</div>
+          <div class="artist-info">
+            <div class="artist-badge-verified">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              Исполнитель
+            </div>
+            <h1 class="artist-title-huge">${this.escapeHtml(artistName)}</h1>
+            <div class="artist-meta-stats">
+              <span>${localTracks.length} треков в медиатеке</span>
+              ${data.fan_count ? `<span>• ${Number(data.fan_count).toLocaleString()} слушателей</span>` : ''}
+              ${totalSec > 0 ? `<span>• ${Player.formatTime(totalSec)}</span>` : ''}
+            </div>
+            
+            <div class="artist-actions-bar">
+              ${localTracks.length > 0 ? `
+                <button class="btn-play-all" onclick="App.playArtistAll()">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  Слушать все песни
+                </button>
+                <button class="btn-shuffle-all" onclick="App.playArtistAll(true)">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                  Перемешать
+                </button>
+              ` : ''}
+              <button class="btn-shuffle-all" onclick="App.openDownloaderWithQuery('${this.escapeHtml(artistName)}')">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                Скачать ещё треки
+              </button>
+            </div>
           </div>
         </div>
 
-        <button class="btn-primary" onclick="Player.playTrack(App.activeTracks[0], App.activeTracks)">Слушать исполнителя</button>
-        ${this.renderTrackTable(tracks)}
+        <!-- TRACKS IN LIBRARY -->
+        <div>
+          <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 14px;">Песни в медиатеке (${localTracks.length})</h2>
+          ${localTracks.length > 0 ? this.renderTrackTable(localTracks) : `
+            <div style="background: var(--bg-surface); padding: 24px; border-radius: var(--radius-md); text-align: center; color: var(--text-subdued);">
+              У вас пока нет локальных треков ${this.escapeHtml(artistName)}. Скачайте их ниже через spotDL!
+            </div>
+          `}
+        </div>
+
+        <!-- ALBUMS (if any) -->
+        ${(data.local_albums && data.local_albums.length > 0) ? `
+          <div>
+            <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 14px;">Альбомы</h2>
+            <div class="cards-grid">
+              ${data.local_albums.map(al => `
+                <div class="media-card" onclick="App.openAlbum('${this.escapeHtml(al.album)}')">
+                  <div class="media-card-img-wrap">
+                    <img class="media-card-img" src="/api/covers/${al.sample_track_id}" onerror="this.src='/static/icons/icon.svg'" />
+                  </div>
+                  <div class="media-card-title">${this.escapeHtml(al.album)}</div>
+                  <div class="media-card-sub">${this.escapeHtml(artistName)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- SIMILAR TRACKS (Radio) -->
+        ${(data.similar_tracks && data.similar_tracks.length > 0) ? `
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+              <div>
+                <h2 style="font-size: 1.3rem; font-weight: 700;">Похожие треки и радио</h2>
+                <div style="font-size: 0.85rem; color: var(--text-subdued);">Рекомендации в стиле ${this.escapeHtml(artistName)}</div>
+              </div>
+            </div>
+            <div class="similar-card-list">
+              ${data.similar_tracks.map(st => this.renderSimilarTrackRow(st)).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- SIMILAR ARTISTS (Fans Also Like) -->
+        ${(data.similar_artists && data.similar_artists.length > 0) ? `
+          <div>
+            <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 14px;">Похожие исполнители</h2>
+            <div class="cards-grid">
+              ${data.similar_artists.map(sa => `
+                <div class="media-card" onclick="App.openArtist('${this.escapeHtml(sa.name)}')">
+                  <div class="media-card-img-wrap rounded" style="background:#282828;">
+                    ${sa.picture ? `<img class="media-card-img" src="${sa.picture}" alt="${this.escapeHtml(sa.name)}" />` : `
+                      <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+                        <svg viewBox="0 0 24 24" width="40" height="40" fill="var(--text-subdued)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                      </div>
+                    `}
+                  </div>
+                  <div class="media-card-title">${this.escapeHtml(sa.name)}</div>
+                  <div class="media-card-sub">${sa.is_in_library ? '<span style="color:var(--green); font-weight:700;">● В медиатеке</span>' : 'Исполнитель'}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   },
@@ -693,7 +862,9 @@ const App = {
           <div>
             <div style="text-transform: uppercase; font-size: 0.75rem; font-weight: 700; margin-bottom: 6px;">Альбом</div>
             <h1 style="font-size: 2.2rem; font-weight: 900; margin-bottom: 8px;">${this.escapeHtml(albumName)}</h1>
-            <div style="color: var(--text-subdued); font-size: 0.9rem;">${this.escapeHtml(sampleTrack.artist || '')} • ${tracks.length} треков</div>
+            <div style="color: var(--text-subdued); font-size: 0.9rem;">
+              <span class="track-artist-link" onclick="App.openArtist('${this.escapeHtml(sampleTrack.artist || '')}')">${this.escapeHtml(sampleTrack.artist || '')}</span> • ${tracks.length} треков
+            </div>
           </div>
         </div>
 
@@ -729,7 +900,7 @@ const App = {
                   <img class="track-cover-sm" src="/api/covers/${t.id}" onerror="this.src='/static/icons/icon.svg'" />
                   <div class="track-meta">
                     <span class="track-title-text">${this.escapeHtml(t.title)}</span>
-                    <span class="track-artist-text">${this.escapeHtml(t.artist)}</span>
+                    <span class="track-artist-text track-artist-link" onclick="event.stopPropagation(); App.openArtist('${this.escapeHtml(t.artist)}')">${this.escapeHtml(t.artist)}</span>
                   </div>
                 </div>
               </td>
@@ -782,6 +953,14 @@ const App = {
       <div style="font-weight: 700; margin-bottom: 12px; font-size: 1.1rem;">Опции трека</div>
       <button class="btn-secondary" style="width: 100%; justify-content: flex-start; margin-bottom: 8px;" onclick="Player.addToQueue(App.activeTracks.find(t=>t.id==${trackId})); App.closeModal('track-actions-modal');">
         Добавить в очередь
+      </button>
+      <button class="btn-secondary" style="width: 100%; justify-content: flex-start; margin-bottom: 8px;" onclick="App.closeModal('track-actions-modal'); App.openSimilarModal(${trackId});">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right:8px;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/><path d="M19 8l1.25-2.75L23 4l-2.75-1.25L19 0l-1.25 2.75L15 4l2.75 1.25z"/></svg>
+        Похожие треки (Радио)
+      </button>
+      <button class="btn-secondary" style="width: 100%; justify-content: flex-start; margin-bottom: 8px;" onclick="App.closeModal('track-actions-modal'); const t = App.activeTracks.find(x=>x.id==${trackId}); if (t) App.openArtist(t.artist);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right:8px;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        Перейти к исполнителю
       </button>
     `;
 
@@ -863,6 +1042,198 @@ const App = {
     }
 
     this.openModal('queue-modal');
+  },
+
+  playArtistAll(shuffle = false) {
+    if (!this.activeTracks || this.activeTracks.length === 0) {
+      this.showToast('Нет треков в медиатеке');
+      return;
+    }
+    let list = [...this.activeTracks];
+    if (shuffle) {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      this.showToast('Включён случайный порядок треков артиста');
+    } else {
+      this.showToast('Включены все треки артиста');
+    }
+    Player.playTrack(list[0], list);
+  },
+
+  renderSimilarTrackRow(st) {
+    const qStr = `${st.artist} - ${st.title}`;
+    return `
+      <div class="similar-track-item">
+        <div class="similar-track-left">
+          <img class="similar-track-cover" src="${st.cover || '/static/icons/icon.svg'}" onerror="this.src='/static/icons/icon.svg'" />
+          <div class="similar-track-meta">
+            <span class="similar-track-title">${this.escapeHtml(st.title)}</span>
+            <span class="similar-track-sub">
+              <span class="track-artist-link" onclick="event.stopPropagation(); App.openArtist('${this.escapeHtml(st.artist)}')">${this.escapeHtml(st.artist)}</span>
+              ${st.album ? ` • ${this.escapeHtml(st.album)}` : ''}
+            </span>
+          </div>
+        </div>
+        <div class="similar-track-actions">
+          ${st.is_local ? `
+            <span class="badge-in-library">В медиатеке</span>
+            <button class="btn-play-all" style="padding: 6px 14px; font-size: 0.8rem;" onclick="App.playLocalTrackById(${st.local_track_id})">
+              ▶
+            </button>
+          ` : `
+            ${st.preview_url ? `
+              <button class="btn-preview" onclick="App.togglePreview('${st.preview_url}', this)" title="Слушать превью 30 сек">
+                ♫ Превью
+              </button>
+            ` : ''}
+            <button class="btn-download-sm" onclick="App.quickDownloadTrack('${this.escapeHtml(qStr)}', this)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+              Скачать
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  },
+
+  async openSimilarModal(trackId) {
+    const modal = document.getElementById('similar-modal');
+    const container = document.getElementById('similar-modal-content');
+    if (!modal || !container) return;
+
+    container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--text-muted);">Ищем похожие треки...</div>`;
+    this.openModal('similar-modal');
+
+    try {
+      const data = await API.getSimilarTracks(trackId);
+      const seed = data.seed_track;
+      if (!seed) {
+        container.innerHTML = `<div style="color: var(--text-muted); text-align:center; padding: 20px;">Трек не найден</div>`;
+        return;
+      }
+
+      document.getElementById('similar-modal-title').innerHTML = `
+        <span>🎧 Радио трека: ${this.escapeHtml(seed.title)}</span>
+      `;
+
+      let html = `
+        <div style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:var(--radius-sm); margin-bottom:16px;">
+          <img src="/api/covers/${seed.id}" style="width:50px; height:50px; border-radius:var(--radius-sm); object-fit:cover;" onerror="this.src='/static/icons/icon.svg'" />
+          <div>
+            <div style="font-weight:700;">${this.escapeHtml(seed.title)}</div>
+            <div style="font-size:0.85rem; color:var(--text-subdued);">${this.escapeHtml(seed.artist)}</div>
+          </div>
+        </div>
+      `;
+
+      if (data.local_similar && data.local_similar.length > 0) {
+        html += `
+          <div style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">Похожие в вашей медиатеке</div>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-bottom: 20px;">
+            ${data.local_similar.map(t => `
+              <div class="similar-track-item" style="cursor:pointer;" onclick="App.playLocalTrackById(${t.id}); App.closeModal('similar-modal');">
+                <div class="similar-track-left">
+                  <img class="similar-track-cover" src="/api/covers/${t.id}" onerror="this.src='/static/icons/icon.svg'" />
+                  <div class="similar-track-meta">
+                    <span class="similar-track-title">${this.escapeHtml(t.title)}</span>
+                    <span class="similar-track-sub">${this.escapeHtml(t.artist)}</span>
+                  </div>
+                </div>
+                <div class="similar-track-actions">
+                  <span class="badge-in-library">В медиатеке</span>
+                  <button class="btn-play-all" style="padding:6px 12px; font-size:0.75rem;">▶</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      if (data.similar_tracks && data.similar_tracks.length > 0) {
+        html += `
+          <div style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">Рекомендации и похожие треки</div>
+          <div class="similar-card-list">
+            ${data.similar_tracks.map(st => this.renderSimilarTrackRow(st)).join('')}
+          </div>
+        `;
+      } else if (!data.local_similar || data.local_similar.length === 0) {
+        html += `<div style="text-align:center; color:var(--text-muted); padding:20px;">Похожих треков не найдено</div>`;
+      }
+
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = `<div style="color:var(--red); text-align:center; padding:20px;">Ошибка загрузки похожих треков</div>`;
+    }
+  },
+
+  async playLocalTrackById(trackId) {
+    try {
+      const track = await API.getTrack(trackId);
+      if (track) {
+        Player.playTrack(track, [track]);
+        this.showToast(`Играет: ${track.artist} - ${track.title}`);
+      }
+    } catch (e) {
+      this.showToast('Ошибка воспроизведения трека');
+    }
+  },
+
+  async quickDownloadTrack(query, btnEl) {
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Загрузка...';
+    }
+    this.showToast(`Загрузка «${query}» запущена через spotDL`);
+    try {
+      await API.startDownload(query);
+    } catch (e) {
+      this.showToast('Ошибка запуска загрузки');
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Скачать';
+      }
+    }
+  },
+
+  _previewAudio: null,
+  _previewBtn: null,
+
+  togglePreview(url, btnEl) {
+    if (this._previewAudio) {
+      this._previewAudio.pause();
+      if (this._previewBtn) {
+        this._previewBtn.classList.remove('playing');
+        this._previewBtn.textContent = '♫ Превью';
+      }
+      if (this._previewAudio.src === url) {
+        this._previewAudio = null;
+        this._previewBtn = null;
+        return;
+      }
+    }
+
+    const audio = new Audio(url);
+    audio.play();
+    btnEl.classList.add('playing');
+    btnEl.textContent = '⏸ Стоп';
+    this._previewAudio = audio;
+    this._previewBtn = btnEl;
+
+    audio.onended = () => {
+      btnEl.classList.remove('playing');
+      btnEl.textContent = '♫ Превью';
+      this._previewAudio = null;
+      this._previewBtn = null;
+    };
+    audio.onerror = () => {
+      btnEl.classList.remove('playing');
+      btnEl.textContent = '♫ Превью';
+      this._previewAudio = null;
+      this._previewBtn = null;
+      this.showToast('Ошибка воспроизведения превью');
+    };
   },
 
   openModal(id) {

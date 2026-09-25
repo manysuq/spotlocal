@@ -69,10 +69,10 @@ async def run_spotdl_job(job_id: str, query: str):
     await broadcast_event("job_started", {"job_id": job_id, "query": query})
 
     cmd = find_spotdl_binary() + [
-        "download",
         query,
         "--output", SPOTDL_OUTPUT_TEMPLATE,
         "--format", SPOTDL_AUDIO_FORMAT,
+        "--print-errors",
     ]
 
     env = os.environ.copy()

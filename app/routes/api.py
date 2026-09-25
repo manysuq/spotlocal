@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from app import database as db
+from app import recommendations as rec
 from app.scanner import scan_library
 
 router = APIRouter(prefix="/api", tags=["API"])
@@ -68,9 +69,34 @@ def get_artists():
     return db.get_artists()
 
 
+@router.get("/artists/{artist_name:path}")
+def get_artist_details(artist_name: str):
+    info = rec.get_artist_info_and_similar(artist_name)
+    return info
+
+
 @router.get("/albums")
 def get_albums():
     return db.get_albums()
+
+
+# Recommendations & Similar Tracks
+@router.get("/tracks/{track_id}/similar")
+def get_track_similar(track_id: int):
+    return rec.get_track_recommendations(track_id)
+
+
+@router.get("/recommendations")
+def get_recommendations(artist: Optional[str] = None, track_id: Optional[int] = None):
+    if track_id:
+        return rec.get_track_recommendations(track_id)
+    if artist:
+        return rec.get_artist_info_and_similar(artist)
+    # Default: recommendations based on most played or last added track
+    tracks = db.get_all_tracks(sort_by="play_count", limit=1)
+    if tracks and tracks[0].get("artist"):
+        return rec.get_artist_info_and_similar(tracks[0]["artist"])
+    return {"artist": "", "avatar_url": None, "similar_artists": [], "similar_tracks": []}
 
 
 # Playlists Endpoints
