@@ -81,6 +81,11 @@ def get_albums():
 
 
 # Recommendations & Similar Tracks
+@router.get("/search")
+def search_unified(q: str = Query(..., min_length=1)):
+    return rec.search_unified(q)
+
+
 @router.get("/tracks/{track_id}/similar")
 def get_track_similar(track_id: int):
     return rec.get_track_recommendations(track_id)
@@ -92,7 +97,6 @@ def get_recommendations(artist: Optional[str] = None, track_id: Optional[int] = 
         return rec.get_track_recommendations(track_id)
     if artist:
         return rec.get_artist_info_and_similar(artist)
-    # Default: recommendations based on most played or last added track
     tracks = db.get_all_tracks(sort_by="play_count", limit=1)
     if tracks and tracks[0].get("artist"):
         return rec.get_artist_info_and_similar(tracks[0]["artist"])

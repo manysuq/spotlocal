@@ -239,6 +239,7 @@ const App = {
         this.showToast('Загрузка через spotDL завершена!');
         if (term) term.textContent += `\n[SUCCESS] spotDL finished download. Library rescanned: +${data.scan_result?.indexed || 0} tracks.\n`;
         this.loadSidebarPlaylists();
+        this.updateArtistBadges();
         if (this.currentTab === 'home' || this.currentTab === 'library') {
           this.navigate(this.currentTab);
         }
@@ -247,6 +248,47 @@ const App = {
         if (term) term.textContent += `\n[ERROR] ${data.error}\n`;
       }
     });
+  },
+
+  async updateArtistBadges() {
+    if (!this.activeTracks || this.activeTracks.length === 0) return;
+    try {
+      const allDownloaded = await API.getTracks({ limit: 1000 });
+      const dlMap = new Map();
+      for (const t of allDownloaded) {
+        const k = `${t.title.toLowerCase()}:${t.artist.toLowerCase()}`;
+        dlMap.set(k, t.id);
+      }
+      let changed = false;
+      for (const at of this.activeTracks) {
+        const k = `${(at.title || '').toLowerCase()}:${(at.artist || '').toLowerCase()}`;
+        if (!at.is_local && dlMap.has(k)) {
+          at.is_local = true;
+          at.local_track_id = dlMap.get(k);
+          at.id = dlMap.get(k);
+          changed = true;
+        }
+      }
+      if (Player.currentTrack && !Player.currentTrack.is_local) {
+        const curK = `${(Player.currentTrack.title || '').toLowerCase()}:${(Player.currentTrack.artist || '').toLowerCase()}`;
+        if (dlMap.has(curK)) {
+          Player.currentTrack.id = dlMap.get(curK);
+          Player.currentTrack.is_local = true;
+        }
+      }
+      if (changed && this.currentTab === 'artist') {
+        const trackContainer = document.querySelector('.track-table tbody');
+        if (trackContainer) {
+          const freshTable = this.renderArtistTrackTable(this.activeTracks);
+          const temp = document.createElement('div');
+          temp.innerHTML = freshTable;
+          const newTbody = temp.querySelector('tbody');
+          if (newTbody) trackContainer.innerHTML = newTbody.innerHTML;
+        }
+      }
+    } catch (e) {
+      console.warn('Error updating badges:', e);
+    }
   },
 
   async navigate(tab, param = null) {
@@ -439,30 +481,119 @@ const App = {
 
     const q = query.trim();
     if (!q) {
-      resArea.innerHTML = '<div style="color: var(--text-subdued);">Введите поисковый запрос</div>';
+      resArea.innerHTML = '<div style="color: var(--text-subdued); padding: 20px 0;">Введите поисковый запрос (например: Noize MC, Queen, Выдыхай...)</div>';
       return;
     }
 
+    resArea.innerHTML = `
+      <div style="padding: 30px; text-align: center; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <span style="display:inline-block; width:16px; height:16px; border:2px solid var(--green); border-top-color:transparent; border-radius:50%; animation: spin 0.8s linear infinite;"></span>
+        <span>Поиск по всему каталогу музыки и медиатеке...</span>
+      </div>
+    `;
+
     try {
-      const tracks = await API.getTracks({ search: q, limit: 100 });
-      this.activeTracks = tracks;
-      if (tracks.length === 0) {
-        resArea.innerHTML = `
-          <div style="padding: 30px; text-align: center; color: var(--text-muted);">
-            По запросу «${this.escapeHtml(q)}» ничего не найдено в локальной библиотеке.
-            <div style="margin-top: 14px;">
-              <button class="btn-secondary" onclick="App.openDownloaderWithQuery('${this.escapeHtml(q)}')">Скачать «${this.escapeHtml(q)}» через spotDL</button>
+      const data = await API.searchUnified(q);
+      let html = '';
+
+      // 1. TOP RESULT
+      if (data.top_result) {
+        const tr = data.top_result;
+        const isArtist = tr.type === 'artist';
+        const clickAction = isArtist 
+          ? `App.openArtist('${this.escapeHtml(tr.name)}')` 
+          : (tr.is_local ? `App.playLocalTrackById(${tr.track_id})` : `App.playOnlineTrack(${JSON.stringify(tr).replace(/"/g, '&quot;')})`);
+
+        html += `
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">Лучший результат</h2>
+            <div class="top-result-card" onclick="${clickAction}">
+              <div class="top-result-img-wrap ${isArtist ? 'rounded' : ''}">
+                ${tr.picture ? `<img src="${tr.picture}" class="top-result-img" onerror="this.src='/static/icons/icon.svg'" />` : `
+                  <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#282828;">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="var(--text-subdued)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                  </div>
+                `}
+              </div>
+              <div class="top-result-info">
+                <h3 class="top-result-title">${this.escapeHtml(tr.name)}</h3>
+                <div class="top-result-meta">
+                  <span class="badge-tag">${this.escapeHtml(tr.subtitle || (isArtist ? 'Исполнитель' : 'Трек'))}</span>
+                  ${tr.fans ? `<span>• ${Number(tr.fans).toLocaleString()} слушателей</span>` : ''}
+                </div>
+              </div>
+              <button class="btn-play-all" style="padding: 10px 22px; font-size: 0.9rem;" onclick="event.stopPropagation(); ${clickAction}">
+                ${isArtist ? 'Перейти к артисту →' : '▶ Слушать'}
+              </button>
             </div>
           </div>
         `;
-      } else {
-        resArea.innerHTML = `
-          <div style="margin-bottom: 12px; color: var(--text-subdued); font-size: 0.85rem;">Найдено треков: ${tracks.length}</div>
-          ${this.renderTrackTable(tracks)}
+      }
+
+      // 2. ONLINE TRACKS / SONGS (WITH 1-CLICK DOWNLOAD / PLAY)
+      if (data.online_tracks && data.online_tracks.length > 0) {
+        html += `
+          <div style="margin-bottom: 24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+              <h2 style="font-size: 1.15rem; font-weight: 700;">Песни (Spotify)</h2>
+              <span style="font-size: 0.8rem; color: var(--text-subdued);">${data.online_tracks.length} найдено</span>
+            </div>
+            <div class="similar-card-list">
+              ${data.online_tracks.map(t => this.renderSimilarTrackRow(t)).join('')}
+            </div>
+          </div>
         `;
       }
+
+      // 3. ARTISTS (MATCHING)
+      if (data.artists && data.artists.length > 0) {
+        html += `
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">Исполнители</h2>
+            <div class="cards-grid">
+              ${data.artists.map(a => `
+                <div class="media-card" onclick="App.openArtist('${this.escapeHtml(a.name)}')">
+                  <div class="media-card-img-wrap rounded" style="background:#282828;">
+                    ${a.picture ? `<img class="media-card-img" src="${a.picture}" alt="${this.escapeHtml(a.name)}" />` : `
+                      <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+                        <svg viewBox="0 0 24 24" width="40" height="40" fill="var(--text-subdued)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                      </div>
+                    `}
+                  </div>
+                  <div class="media-card-title">${this.escapeHtml(a.name)}</div>
+                  <div class="media-card-sub">${a.is_local ? '<span style="color:var(--green); font-weight:700;">● В медиатеке</span>' : 'Исполнитель'}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // 4. LOCAL TRACKS
+      if (data.local_tracks && data.local_tracks.length > 0) {
+        html += `
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">В вашей локальной медиатеке (${data.local_tracks.length})</h2>
+            ${this.renderTrackTable(data.local_tracks)}
+          </div>
+        `;
+      }
+
+      if (!html) {
+        html = `
+          <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+            По запросу «${this.escapeHtml(q)}» ничего не найдено.
+            <div style="margin-top: 14px;">
+              <button class="btn-primary" onclick="App.openDownloaderWithQuery('${this.escapeHtml(q)}')">Скачать через spotDL</button>
+            </div>
+          </div>
+        `;
+      }
+
+      resArea.innerHTML = html;
     } catch (e) {
-      resArea.innerHTML = `<div style="color: var(--red);">Ошибка поиска</div>`;
+      console.error('Search error:', e);
+      resArea.innerHTML = `<div style="color: var(--red); padding: 20px; text-align: center;">Ошибка поиска в сети</div>`;
     }
   },
 
@@ -713,25 +844,66 @@ const App = {
   },
 
   async renderArtist(container, artistName) {
-    container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">Загрузка профиля артиста...</div>`;
+    container.innerHTML = `
+      <div style="padding: 60px 20px; text-align: center; color: var(--text-muted); display:flex; align-items:center; justify-content:center; gap:12px;">
+        <span style="display:inline-block; width:20px; height:20px; border:2px solid var(--green); border-top-color:transparent; border-radius:50%; animation: spin 0.8s linear infinite;"></span>
+        <span style="font-size: 1.05rem;">Поиск артиста «${this.escapeHtml(artistName)}» по всему интернету...</span>
+      </div>
+    `;
     
     let data;
     try {
       data = await API.getArtist(artistName);
     } catch (e) {
+      console.warn('API.getArtist failed, falling back to local tracks:', e);
       const local = await API.getTracks({ artist: artistName });
       data = {
         artist: artistName,
         local_tracks: local,
+        top_tracks: [],
         local_albums: [],
+        online_albums: [],
         similar_artists: [],
         similar_tracks: []
       };
     }
 
     const localTracks = data.local_tracks || [];
-    this.activeTracks = localTracks;
-    const totalSec = localTracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+    const topTracks = data.top_tracks || [];
+
+    // Compile complete tracklist: all popular songs from internet + local tracks
+    const allTracks = [];
+    const seenKeys = new Set();
+
+    // 1. Add internet top tracks
+    for (const t of topTracks) {
+      const key = `${(t.title || '').toLowerCase()}:${(t.artist || '').toLowerCase()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        allTracks.push(t);
+      }
+    }
+
+    // 2. Add any local tracks not in top tracks
+    for (const lt of localTracks) {
+      const key = `${(lt.title || '').toLowerCase()}:${(lt.artist || '').toLowerCase()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        allTracks.push({
+          id: lt.id,
+          local_track_id: lt.id,
+          title: lt.title,
+          artist: lt.artist,
+          album: lt.album,
+          duration: lt.duration,
+          is_local: true,
+          cover: `/api/covers/${lt.id}`
+        });
+      }
+    }
+
+    this.activeTracks = allTracks;
+    const totalSec = allTracks.reduce((acc, t) => acc + (t.duration || 0), 0);
 
     const avatarHtml = data.avatar_url 
       ? `<img src="${data.avatar_url}" class="artist-avatar-img" alt="${this.escapeHtml(artistName)}" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#282828;\\'><svg viewBox=\\'0 0 24 24\\' width=\\'70\\' height=\\'70\\' fill=\\'var(--text-subdued)\\'><path d=\\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\\'/></svg></div>'" />`
@@ -753,13 +925,14 @@ const App = {
             </div>
             <h1 class="artist-title-huge">${this.escapeHtml(artistName)}</h1>
             <div class="artist-meta-stats">
-              <span>${localTracks.length} треков в медиатеке</span>
+              <span>${allTracks.length} песен доступно</span>
+              <span>• ${localTracks.length} скачано в медиатеку</span>
               ${data.fan_count ? `<span>• ${Number(data.fan_count).toLocaleString()} слушателей</span>` : ''}
               ${totalSec > 0 ? `<span>• ${Player.formatTime(totalSec)}</span>` : ''}
             </div>
             
             <div class="artist-actions-bar">
-              ${localTracks.length > 0 ? `
+              ${allTracks.length > 0 ? `
                 <button class="btn-play-all" onclick="App.playArtistAll()">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                   Слушать все песни
@@ -768,37 +941,53 @@ const App = {
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
                   Перемешать
                 </button>
+                <button class="btn-shuffle-all" onclick="App.downloadArtistTop('${this.escapeHtml(artistName)}')">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                  Скачать топ-5 (spotDL)
+                </button>
               ` : ''}
               <button class="btn-shuffle-all" onclick="App.openDownloaderWithQuery('${this.escapeHtml(artistName)}')">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
-                Скачать ещё треки
+                Загрузчик spotDL
               </button>
             </div>
           </div>
         </div>
 
-        <!-- TRACKS IN LIBRARY -->
+        <!-- TRACKS LIST (Internet + Local) -->
         <div>
-          <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 14px;">Песни в медиатеке (${localTracks.length})</h2>
-          ${localTracks.length > 0 ? this.renderTrackTable(localTracks) : `
-            <div style="background: var(--bg-surface); padding: 24px; border-radius: var(--radius-md); text-align: center; color: var(--text-subdued);">
-              У вас пока нет локальных треков ${this.escapeHtml(artistName)}. Скачайте их ниже через spotDL!
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px;">
+            <h2 style="font-size: 1.3rem; font-weight: 700;">Популярные песни (${allTracks.length})</h2>
+            <span style="font-size:0.85rem; color:var(--text-subdued);">Нажмите на любой трек для прослушивания и загрузки spotDL</span>
+          </div>
+          ${allTracks.length > 0 ? this.renderArtistTrackTable(allTracks) : `
+            <div style="background: var(--bg-surface); padding: 30px; border-radius: var(--radius-md); text-align: center; color: var(--text-subdued);">
+              Песен не найдено. Попробуйте скачать треки через встроенный spotDL!
             </div>
           `}
         </div>
 
-        <!-- ALBUMS (if any) -->
-        ${(data.local_albums && data.local_albums.length > 0) ? `
+        <!-- ONLINE ALBUMS (from Deezer) -->
+        ${((data.online_albums && data.online_albums.length > 0) || (data.local_albums && data.local_albums.length > 0)) ? `
           <div>
             <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 14px;">Альбомы</h2>
             <div class="cards-grid">
-              ${data.local_albums.map(al => `
+              ${(data.online_albums || []).map(al => `
+                <div class="media-card" onclick="App.openDownloaderWithQuery('${this.escapeHtml(artistName + ' ' + al.title)}')">
+                  <div class="media-card-img-wrap">
+                    <img class="media-card-img" src="${al.cover || '/static/icons/icon.svg'}" onerror="this.src='/static/icons/icon.svg'" />
+                  </div>
+                  <div class="media-card-title">${this.escapeHtml(al.title)}</div>
+                  <div class="media-card-sub">${al.release_date ? al.release_date.slice(0, 4) : 'Альбом'} • Скачать spotDL</div>
+                </div>
+              `).join('')}
+              ${(data.local_albums || []).map(al => `
                 <div class="media-card" onclick="App.openAlbum('${this.escapeHtml(al.album)}')">
                   <div class="media-card-img-wrap">
                     <img class="media-card-img" src="/api/covers/${al.sample_track_id}" onerror="this.src='/static/icons/icon.svg'" />
                   </div>
                   <div class="media-card-title">${this.escapeHtml(al.album)}</div>
-                  <div class="media-card-sub">${this.escapeHtml(artistName)}</div>
+                  <div class="media-card-sub"><span style="color:var(--green);font-weight:700;">● В медиатеке</span></div>
                 </div>
               `).join('')}
             </div>
@@ -835,7 +1024,7 @@ const App = {
                     `}
                   </div>
                   <div class="media-card-title">${this.escapeHtml(sa.name)}</div>
-                  <div class="media-card-sub">${sa.is_in_library ? '<span style="color:var(--green); font-weight:700;">● В медиатеке</span>' : 'Исполнитель'}</div>
+                  <div class="media-card-sub">${sa.is_in_library ? '<span style="color:var(--green); font-weight:700;">● В медиатеке</span>' : (sa.fans ? `${Number(sa.fans).toLocaleString()} слушателей` : 'Исполнитель')}</div>
                 </div>
               `).join('')}
             </div>
@@ -1046,7 +1235,7 @@ const App = {
 
   playArtistAll(shuffle = false) {
     if (!this.activeTracks || this.activeTracks.length === 0) {
-      this.showToast('Нет треков в медиатеке');
+      this.showToast('Нет доступных треков артиста');
       return;
     }
     let list = [...this.activeTracks];
@@ -1057,15 +1246,118 @@ const App = {
       }
       this.showToast('Включён случайный порядок треков артиста');
     } else {
-      this.showToast('Включены все треки артиста');
+      this.showToast(`Воспроизведение всех треков артиста (${list.length})`);
     }
     Player.playTrack(list[0], list);
   },
 
+  playArtistTrack(idx) {
+    if (!this.activeTracks || !this.activeTracks[idx]) return;
+    Player.playTrack(this.activeTracks[idx], this.activeTracks);
+  },
+
+  playOnlineTrack(track) {
+    if (!track) return;
+    Player.playTrack(track, [track]);
+  },
+
+  _downloadingTracks: new Set(),
+  onOnlineTrackPlay(track) {
+    if (!track || track.is_local) return;
+    const qStr = `${track.artist} - ${track.title}`;
+    if (this._downloadingTracks.has(qStr)) return;
+    this._downloadingTracks.add(qStr);
+
+    this.showToast(`Воспроизведение онлайн. spotDL скачивает полный трек...`);
+    API.startDownload(qStr).catch(err => {
+      console.warn('Auto spotDL download error:', err);
+      this._downloadingTracks.delete(qStr);
+    });
+  },
+
+  async downloadArtistTop(artistName) {
+    if (!this.activeTracks || this.activeTracks.length === 0) {
+      this.openDownloaderWithQuery(artistName);
+      return;
+    }
+    const toDownload = this.activeTracks.filter(t => !t.is_local).slice(0, 5);
+    if (toDownload.length === 0) {
+      this.showToast('Все популярные треки артиста уже скачаны в медиатеку!');
+      return;
+    }
+    this.showToast(`Запущено скачивание ${toDownload.length} лучших песен «${artistName}» через spotDL...`);
+    for (const t of toDownload) {
+      const q = `${t.artist} - ${t.title}`;
+      this._downloadingTracks.add(q);
+      API.startDownload(q).catch(() => {});
+    }
+  },
+
+  renderArtistTrackTable(tracks) {
+    return `
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th>Название</th>
+            <th class="track-album-cell">Альбом</th>
+            <th style="width: 80px; text-align: right;">Время</th>
+            <th style="width: 140px; text-align: right;">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tracks.map((t, idx) => {
+            const isCur = (Player.currentTrack?.id && Player.currentTrack?.id == t.id) || 
+                          (Player.currentTrack?.title === t.title && Player.currentTrack?.artist === t.artist);
+            const coverSrc = t.cover || (t.id ? `/api/covers/${t.id}` : (t.local_track_id ? `/api/covers/${t.local_track_id}` : '/static/icons/icon.svg'));
+            const qStr = `${t.artist} - ${t.title}`;
+            return `
+              <tr class="track-row ${isCur ? 'active' : ''}" onclick="App.playArtistTrack(${idx})">
+                <td class="track-cell track-num-cell">
+                  <span class="track-index">${idx + 1}</span>
+                  <span class="track-play-icon">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                </td>
+                <td class="track-cell">
+                  <div class="track-info-cell">
+                    <img class="track-cover-sm" src="${coverSrc}" onerror="this.src='/static/icons/icon.svg'" />
+                    <div class="track-meta">
+                      <span class="track-title-text">${this.escapeHtml(t.title)}</span>
+                      <span class="track-artist-text">${this.escapeHtml(t.artist)}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="track-cell track-album-cell">${this.escapeHtml(t.album || '-')}</td>
+                <td class="track-cell" style="text-align: right; color: var(--text-subdued); font-size: 0.8rem;">
+                  ${Player.formatTime(t.duration)}
+                </td>
+                <td class="track-cell" style="text-align: right;" onclick="event.stopPropagation();">
+                  ${t.is_local ? `
+                    <span class="badge-in-library">● В медиатеке</span>
+                  ` : `
+                    <button class="btn-download-sm" onclick="App.quickDownloadTrack('${this.escapeHtml(qStr)}', this)">
+                      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                      Скачать
+                    </button>
+                  `}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  },
+
   renderSimilarTrackRow(st) {
     const qStr = `${st.artist} - ${st.title}`;
+    const clickHandler = st.is_local && st.local_track_id 
+      ? `App.playLocalTrackById(${st.local_track_id})` 
+      : `App.playOnlineTrack(${JSON.stringify(st).replace(/"/g, '&quot;')})`;
+
     return `
-      <div class="similar-track-item">
+      <div class="similar-track-item" style="cursor: pointer;" onclick="${clickHandler}">
         <div class="similar-track-left">
           <img class="similar-track-cover" src="${st.cover || '/static/icons/icon.svg'}" onerror="this.src='/static/icons/icon.svg'" />
           <div class="similar-track-meta">
@@ -1076,18 +1368,16 @@ const App = {
             </span>
           </div>
         </div>
-        <div class="similar-track-actions">
+        <div class="similar-track-actions" onclick="event.stopPropagation();">
           ${st.is_local ? `
             <span class="badge-in-library">В медиатеке</span>
             <button class="btn-play-all" style="padding: 6px 14px; font-size: 0.8rem;" onclick="App.playLocalTrackById(${st.local_track_id})">
               ▶
             </button>
           ` : `
-            ${st.preview_url ? `
-              <button class="btn-preview" onclick="App.togglePreview('${st.preview_url}', this)" title="Слушать превью 30 сек">
-                ♫ Превью
-              </button>
-            ` : ''}
+            <button class="btn-play-all" style="padding: 6px 14px; font-size: 0.8rem;" onclick='App.playOnlineTrack(${JSON.stringify(st).replace(/'/g, "&#39;")})' title="Включить через spotDL">
+              ▶ Слушать
+            </button>
             <button class="btn-download-sm" onclick="App.quickDownloadTrack('${this.escapeHtml(qStr)}', this)">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
               Скачать

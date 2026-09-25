@@ -25,6 +25,10 @@ const API = {
     return this.req(`/api/tracks?${q}`);
   },
 
+  searchUnified(query) {
+    return this.req(`/api/search?q=${encodeURIComponent(query)}`);
+  },
+
   getTrack(id) {
     return this.req(`/api/tracks/${id}`);
   },

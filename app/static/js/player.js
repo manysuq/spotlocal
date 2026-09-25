@@ -82,7 +82,7 @@ class PlayerEngine {
   updateMediaSessionMetadata(track) {
     if (!('mediaSession' in navigator)) return;
 
-    const coverUrl = `/api/covers/${track.id}`;
+    const coverUrl = track.cover || (track.id > 0 ? `/api/covers/${track.id}` : '/static/icons/icon.svg');
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist,
@@ -100,7 +100,7 @@ class PlayerEngine {
 
     if (newQueue && Array.isArray(newQueue)) {
       this.queue = [...newQueue];
-      this.currentIndex = this.queue.findIndex(t => t.id === track.id);
+      this.currentIndex = this.queue.findIndex(t => (t.id > 0 && t.id === track.id) || (t.title === track.title && t.artist === track.artist));
       if (this.currentIndex === -1) {
         this.queue.unshift(track);
         this.currentIndex = 0;
@@ -109,7 +109,7 @@ class PlayerEngine {
       this.queue = [track];
       this.currentIndex = 0;
     } else {
-      this.currentIndex = this.queue.findIndex(t => t.id === track.id);
+      this.currentIndex = this.queue.findIndex(t => (t.id > 0 && t.id === track.id) || (t.title === track.title && t.artist === track.artist));
       if (this.currentIndex === -1) {
         this.queue.push(track);
         this.currentIndex = this.queue.length - 1;
@@ -117,7 +117,15 @@ class PlayerEngine {
     }
 
     this.currentTrack = track;
-    this.audio.src = `/api/stream/${track.id}`;
+    const isOnline = !track.id || track.id <= 0 || !track.is_local;
+    if (track.preview_url && isOnline) {
+      this.audio.src = track.preview_url;
+    } else if (track.id && track.id > 0) {
+      this.audio.src = `/api/stream/${track.id}`;
+    } else if (track.preview_url) {
+      this.audio.src = track.preview_url;
+    }
+
     this.audio.play().catch(err => {
       console.warn('Playback prevented or interrupted:', err);
     });
@@ -125,8 +133,13 @@ class PlayerEngine {
     this.updateMediaSessionMetadata(track);
     this.updateTrackInfoUI(track);
 
-    // Record play count on backend
-    API.recordPlay(track.id).catch(() => {});
+    if (track.id && track.id > 0) {
+      API.recordPlay(track.id).catch(() => {});
+    }
+
+    if (isOnline && window.App && window.App.onOnlineTrackPlay) {
+      window.App.onOnlineTrackPlay(track);
+    }
   }
 
   togglePlay() {
@@ -251,7 +264,7 @@ class PlayerEngine {
 
   // UI Updates
   updateTrackInfoUI(track) {
-    const coverUrl = `/api/covers/${track.id}`;
+    const coverUrl = track.cover || (track.id > 0 ? `/api/covers/${track.id}` : '/static/icons/icon.svg');
 
     // Desktop Player Bar
     const dCover = document.getElementById('player-cover');
