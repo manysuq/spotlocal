@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SpotLocal - Local Spotify & spotDL</title>
+  <meta name="description" content="Локальный Spotify-плеер с загрузчиком через spotDL и веб-приложением для ПК и смартфонов">
+  <meta name="theme-color" content="#121212">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- DESKTOP SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo-container">
+        <svg class="logo-icon" viewBox="0 0 512 512" fill="none">
+          <circle cx="256" cy="256" r="240" fill="#1ed760"/>
+          <path d="M125 180 c75 -24 200 -20 270 20 c9 5 13 17 8 26 c-5 9 -17 13 -26 8 c-62 -36 -175 -40 -242 -19 c-10 3 -21 -2 -24 -12 c-3 -10 2 -20 14 -23 z" fill="#000"/>
+          <path d="M140 250 c65 -20 170 -16 235 21 c8 5 11 16 6 24 c-5 8 -16 11 -24 6 c-56 -33 -150 -36 -207 -19 c-9 3 -19 -2 -22 -11 c-3 -9 2 -19 12 -21 z" fill="#000"/>
+          <path d="M158 320 c55 -16 142 -14 198 18 c7 4 10 14 5 21 c-4 7 -14 10 -21 5 c-47 -27 -126 -29 -174 -15 c-8 2 -16 -3 -19 -11 c-2 -8 3 -16 11 -18 z" fill="#000"/>
+        </svg>
+        <span class="logo-text">SpotLocal <span class="badge-tag">PRO</span></span>
+      </div>
+
+      <nav class="nav-group">
+        <a href="#" class="nav-item active" data-tab="home">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <span>Главная</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="search">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <span>Поиск</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="library">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+          <span>Моя медиатека</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="downloader">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+          <span>Загрузчик spotDL</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-library-header">
+        <span>Плейлисты</span>
+        <button class="btn-icon-sm" id="btn-create-playlist" title="Создать плейлист">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        </button>
+      </div>
+
+      <div class="playlists-scroll">
+        <a href="#" class="playlist-nav-item" onclick="App.navigate('favorites')">
+          <div class="playlist-thumb liked-gradient-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </div>
+          <span>Любимые треки</span>
+        </a>
+        <div id="sidebar-playlists-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <span>Локальный сервер</span>
+        <span style="color: var(--green); font-weight: 700;">● Online</span>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEW -->
+    <main class="main-view">
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="header-left">
+          <div class="search-box-wrapper" id="header-search-wrapper" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="header-search" class="search-input" placeholder="Поиск в локальной медиатеке...">
+          </div>
+        </div>
+        <div class="header-right">
+          <button id="btn-rescan" class="btn-secondary" title="Сканировать локальную папку музыки">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            Обновить
+          </button>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <div id="main-content" class="content-body">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </main>
+  </div>
+
+  <!-- DESKTOP PERSISTENT PLAYER BAR -->
+  <footer class="player-bar">
+    <div class="player-left">
+      <img id="player-cover" class="player-cover" src="/static/icons/icon.svg" alt="Cover" />
+      <div class="player-track-info">
+        <span id="player-title" class="player-track-title">SpotLocal Player</span>
+        <span id="player-artist" class="player-track-artist">Выберите трек для воспроизведения</span>
+      </div>
+      <button id="player-heart" class="btn-heart" title="В избранное">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+    </div>
+
+    <div class="player-center">
+      <div class="playback-controls">
+        <button id="player-shuffle-btn" class="control-btn" title="Случайный порядок">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        </button>
+        <button id="player-prev-btn" class="control-btn" title="Предыдущий трек">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button id="player-play-btn" class="play-pause-btn" title="Воспроизведение/Пауза">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button id="player-next-btn" class="control-btn" title="Следующий трек">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+        <button id="player-repeat-btn" class="control-btn" title="Повтор">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+        </button>
+      </div>
+
+      <div class="playback-bar">
+        <span id="player-current-time" class="time-stamp">0:00</span>
+        <div id="player-progress-wrap" class="progress-bar-wrap">
+          <div id="player-progress-fill" class="progress-bar-fill">
+            <div class="progress-handle"></div>
+          </div>
+        </div>
+        <span id="player-duration" class="time-stamp">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-right">
+      <button id="player-queue-btn" class="control-btn" title="Очередь воспроизведения">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+      </button>
+      <button class="control-btn" title="Громкость">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      </button>
+      <div id="volume-bar-wrap" class="volume-bar-wrap">
+        <div id="volume-bar-fill" class="volume-bar-fill"></div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- MOBILE STICKY MINI-PLAYER (Appears above mobile nav bar) -->
+  <div id="mobile-miniplayer" class="mobile-miniplayer">
+    <div class="miniplayer-progress-line">
+      <div id="mini-progress-fill" class="miniplayer-progress-fill"></div>
+    </div>
+    <img id="mini-cover" class="miniplayer-thumb" src="/static/icons/icon.svg" alt="Cover" />
+    <div class="miniplayer-meta">
+      <span id="mini-title" class="miniplayer-title">SpotLocal</span>
+      <span id="mini-artist" class="miniplayer-artist">Нажмите для выбора трека</span>
+    </div>
+    <div class="miniplayer-actions">
+      <button id="mini-heart" class="btn-heart">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+      <button id="mini-play-btn" style="color: #fff; padding: 6px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- MOBILE FULL-SCREEN PLAYER DRAWER (Expandable Bottom Sheet) -->
+  <div id="mobile-fullscreen-player" class="mobile-fullscreen-player">
+    <div class="fs-player-top">
+      <button id="fs-player-close" class="btn-icon-sm" style="width: 40px; height: 40px;">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+      </button>
+      <span class="fs-player-subtitle">СЕЙЧАС ИГРАЕТ</span>
+      <div style="width: 40px;"></div>
+    </div>
+
+    <div class="fs-player-artwork">
+      <img id="fs-cover" src="/static/icons/icon.svg" alt="Cover" />
+    </div>
+
+    <div class="fs-player-meta-row">
+      <div class="fs-player-meta">
+        <div id="fs-title" class="fs-player-title">SpotLocal</div>
+        <div id="fs-artist" class="fs-player-artist">Нажмите Play для воспроизведения</div>
+      </div>
+      <button id="fs-heart" class="btn-heart" style="transform: scale(1.3);">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+    </div>
+
+    <div class="fs-player-scrub">
+      <div id="fs-progress-wrap" class="progress-bar-wrap" style="height: 6px;">
+        <div id="fs-progress-fill" class="progress-bar-fill">
+          <div class="progress-handle"></div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-subdued); margin-top: 4px;">
+        <span id="fs-current-time">0:00</span>
+        <span id="fs-duration">0:00</span>
+      </div>
+    </div>
+
+    <div class="fs-player-controls">
+      <button id="fs-shuffle-btn" class="control-btn">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+      </button>
+      <button id="fs-prev-btn" class="control-btn">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button id="fs-play-btn" class="fs-player-play-btn">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="fs-next-btn" class="control-btn">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+      </button>
+      <button id="fs-repeat-btn" class="control-btn">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+      </button>
+    </div>
+
+    <div class="fs-player-bottom-actions">
+      <button id="fs-queue-btn" class="btn-secondary" style="font-size: 0.8rem; padding: 8px 16px;">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="margin-right: 6px;"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+        Очередь
+      </button>
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <nav class="mobile-nav-bar">
+    <a href="#" class="mobile-nav-item active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <span>Главная</span>
+    </a>
+    <a href="#" class="mobile-nav-item" data-tab="search">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span>Поиск</span>
+    </a>
+    <a href="#" class="mobile-nav-item" data-tab="library">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+      <span>Медиатека</span>
+    </a>
+    <a href="#" class="mobile-nav-item" data-tab="downloader">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+      <span>Загрузчик</span>
+    </a>
+  </nav>
+
+  <!-- MODALS -->
+  <!-- Create Playlist Modal -->
+  <div id="create-playlist-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-size:1.2rem; font-weight:700;">Новый плейлист</h3>
+        <button class="modal-close btn-icon-sm">✕</button>
+      </div>
+      <form id="form-create-playlist" style="display:flex; flex-direction:column; gap:16px;">
+        <input type="text" id="new-playlist-name" class="dl-input" placeholder="Название плейлиста" required />
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn-secondary modal-close">Отмена</button>
+          <button type="submit" class="btn-primary">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Track Actions Modal -->
+  <div id="track-actions-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="modal-close btn-icon-sm">✕</button>
+      </div>
+      <div id="track-actions-content"></div>
+    </div>
+  </div>
+
+  <!-- Queue Modal -->
+  <div id="queue-modal" class="modal-overlay">
+    <div class="modal-content" style="max-height:80vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-size:1.2rem; font-weight:700;">Очередь воспроизведения</h3>
+        <button class="modal-close btn-icon-sm">✕</button>
+      </div>
+      <div id="queue-tracks-list" style="display:flex; flex-direction:column; gap:4px; margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast-container">Сообщение</div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/player.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
