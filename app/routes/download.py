@@ -18,7 +18,7 @@ class DownloadRequest(BaseModel):
 
 
 @router.post("")
-def trigger_download(payload: DownloadRequest):
+async def trigger_download(payload: DownloadRequest):
     q = payload.query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Query or URL cannot be empty")

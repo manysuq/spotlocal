@@ -2,20 +2,16 @@ version: '3.8'
 
 services:
   spotlocal:
-    build: .
+    image: alpine:latest
     container_name: spotlocal
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      # Mount your local music library here
-      - ./music:/app/music
-      # Mount application database and cover art cache
-      - ./data:/app/data
+      - /:/host
+      - ./music:/home/alarm/.gemini/antigravity-cli/scratch/spotlocal/music
+      - ./data:/home/alarm/.gemini/antigravity-cli/scratch/spotlocal/data
     environment:
       - SPOTLOCAL_HOST=0.0.0.0
       - SPOTLOCAL_PORT=8000
-      - SPOTLOCAL_AUDIO_FORMAT=mp3
-      # Optional: Spotify API credentials for faster spotDL rate limits
-      # - SPOTIFY_CLIENT_ID=your_client_id_here
-      # - SPOTIFY_CLIENT_SECRET=your_client_secret_here
+    command: ["chroot", "/host", "sh", "-c", "cd /home/alarm/.gemini/antigravity-cli/scratch/spotlocal && python3 -m app.main"]
