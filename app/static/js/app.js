@@ -1270,9 +1270,9 @@ const App = {
     if (this._downloadingTracks.has(qStr)) return;
     this._downloadingTracks.add(qStr);
 
-    this.showToast(`Воспроизведение онлайн. spotDL скачивает полный трек...`);
+    this.showToast(`Воспроизведение онлайн. YouTube Music сохраняет трек в медиатеку...`);
     API.startDownload(qStr).catch(err => {
-      console.warn('Auto spotDL download error:', err);
+      console.warn('Auto download error:', err);
       this._downloadingTracks.delete(qStr);
     });
   },
@@ -1287,7 +1287,7 @@ const App = {
       this.showToast('Все популярные треки артиста уже скачаны в медиатеку!');
       return;
     }
-    this.showToast(`Запущено скачивание ${toDownload.length} лучших песен «${artistName}» через spotDL...`);
+    this.showToast(`Запущено быстрое скачивание ${toDownload.length} лучших песен «${artistName}»...`);
     for (const t of toDownload) {
       const q = `${t.artist} - ${t.title}`;
       this._downloadingTracks.add(q);

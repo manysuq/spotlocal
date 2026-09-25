@@ -134,7 +134,6 @@ def get_artist_info_and_similar(artist_name: str) -> Dict[str, Any]:
                 "album": t.get("album", {}).get("title", ""),
                 "cover": t.get("album", {}).get("cover_medium", ""),
                 "duration": t.get("duration", 0),
-                "preview_url": t.get("preview", ""),
                 "is_local": loc_id is not None,
                 "local_track_id": loc_id
             })
@@ -203,7 +202,6 @@ def get_artist_info_and_similar(artist_name: str) -> Dict[str, Any]:
                     "album": t.get("album", {}).get("title", ""),
                     "cover": t.get("album", {}).get("cover_medium", ""),
                     "duration": t.get("duration", 0),
-                    "preview_url": t.get("preview", ""),
                     "is_local": local_id is not None,
                     "local_track_id": local_id
                 })
@@ -248,7 +246,7 @@ def search_unified(query: str) -> Dict[str, Any]:
       - top_result: matched artist or song
       - local_tracks: matching downloaded tracks
       - artists: matching artists
-      - online_tracks: matching online tracks with preview and 1-click download
+      - online_tracks: matching online tracks with full streaming and 1-click download
     """
     q = query.strip()
     if not q:
@@ -319,7 +317,6 @@ def search_unified(query: str) -> Dict[str, Any]:
                     "album": t.get("album", {}).get("title", ""),
                     "cover": t.get("album", {}).get("cover_medium", ""),
                     "duration": t.get("duration", 0),
-                    "preview_url": t.get("preview", ""),
                     "is_local": loc_id is not None,
                     "local_track_id": loc_id
                 })
@@ -364,8 +361,7 @@ def search_unified(query: str) -> Dict[str, Any]:
             "picture": online_tracks[0]["cover"],
             "cover": online_tracks[0]["cover"],
             "is_local": online_tracks[0]["is_local"],
-            "local_track_id": online_tracks[0].get("local_track_id"),
-            "preview_url": online_tracks[0]["preview_url"]
+            "local_track_id": online_tracks[0].get("local_track_id")
         }
 
     res = {

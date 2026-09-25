@@ -1,11 +1,11 @@
-const CACHE_NAME = 'spotlocal-v4';
+const CACHE_NAME = 'spotlocal-v5';
 const STATIC_ASSETS = [
   '/',
   '/static/index.html',
-  '/static/css/style.css?v=4',
-  '/static/js/api.js?v=4',
-  '/static/js/player.js?v=4',
-  '/static/js/app.js?v=4',
+  '/static/css/style.css?v=5',
+  '/static/js/api.js?v=5',
+  '/static/js/player.js?v=5',
+  '/static/js/app.js?v=5',
   '/static/manifest.json',
   '/static/icons/icon.svg'
 ];

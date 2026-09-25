@@ -51,11 +51,7 @@ class PlayerEngine {
 
     this.audio.addEventListener('error', (e) => {
       console.warn('Audio playback error on:', this.audio.src, e);
-      if (this.currentTrack?.preview_url && this.audio.src !== this.currentTrack.preview_url) {
-        console.log('Falling back to preview audio');
-        this.audio.src = this.currentTrack.preview_url;
-        this.audio.play().catch(() => {});
-      } else if (window.App) {
+      if (window.App) {
         window.App.showToast('Ошибка воспроизведения трека');
       }
     });

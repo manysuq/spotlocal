@@ -35,7 +35,7 @@ def clean_query(q: str) -> str:
     return cleaned
 
 
-async def resolve_online_stream_url(query: str) -> Optional[str]:
+async def resolve_online_stream_url(query: str, force_refresh: bool = False) -> Optional[str]:
     """
     Resolves a direct full-length audio stream URL via yt-dlp.
     Caches stream URLs in-memory to ensure instantaneous repeat playback.
@@ -43,7 +43,7 @@ async def resolve_online_stream_url(query: str) -> Optional[str]:
     sanitized = clean_query(query)
     cache_key = sanitized.lower()
     now = time.time()
-    if cache_key in _stream_url_cache:
+    if not force_refresh and cache_key in _stream_url_cache:
         t, u = _stream_url_cache[cache_key]
         if now - t < 7200:
             return u
@@ -52,7 +52,7 @@ async def resolve_online_stream_url(query: str) -> Optional[str]:
         "yt-dlp",
         "--no-playlist",
         "-g",
-        "-f", "ba[ext=m4a]/ba",
+        "-f", "ba[ext=m4a]/ba/bestaudio",
         f"ytsearch1:{sanitized}"
     ]
     env = os.environ.copy()
@@ -74,7 +74,7 @@ async def resolve_online_stream_url(query: str) -> Optional[str]:
                     return line
         else:
             err_msg = stderr.decode(errors="replace") if stderr else f"returncode {proc.returncode}"
-            logger.warning(f"yt-dlp failed for '{query}': {err_msg}")
+            logger.warning(f"yt-dlp stream resolution failed for '{query}': {err_msg}")
     except Exception as e:
         logger.warning(f"Error resolving full stream URL for '{query}': {e}")
 
@@ -115,22 +115,59 @@ def find_spotdl_binary() -> List[str]:
     return [sys.executable, "-m", "spotdl"]
 
 
+def build_download_cmd(query: str, sanitized: str) -> List[str]:
+    """
+    Builds the fastest, highest-quality download command.
+    Uses direct yt-dlp with YouTube Music/YouTube for instant (2-3s) full MP3 downloads.
+    Falls back to spotdl if a Spotify track/album link is provided.
+    """
+    is_spotify = "open.spotify.com" in query.lower() or query.lower().startswith("spotify:")
+    if is_spotify:
+        return find_spotdl_binary() + [
+            query.strip(),
+            "--output", SPOTDL_OUTPUT_TEMPLATE,
+            "--format", SPOTDL_AUDIO_FORMAT,
+            "--audio", "youtube-music", "youtube",
+            "--print-errors",
+        ]
+
+    if query.startswith("http://") or query.startswith("https://"):
+        target = query.strip()
+        out_tmpl = "%(artist,creator,uploader)s - %(title)s.%(ext)s"
+    else:
+        target = f"ytsearch1:{sanitized}"
+        if " - " in sanitized:
+            safe_name = re.sub(r'[/\\:\*?"<>\|]', '_', sanitized)
+            out_tmpl = f"{safe_name}.%(ext)s"
+        else:
+            out_tmpl = "%(artist,creator,uploader)s - %(title)s.%(ext)s"
+
+    return [
+        "yt-dlp",
+        "-x",
+        "--audio-format", "mp3",
+        "--audio-quality", "0",
+        "--embed-thumbnail",
+        "--embed-metadata",
+        "--no-playlist",
+        "--output", out_tmpl,
+        target
+    ]
+
+
 async def run_spotdl_job(job_id: str, query: str):
     """
-    Executes spotdl download process in the background, captures stdout/stderr,
+    Executes download process in background, captures stdout/stderr,
     updates database state, broadcasts SSE logs, and triggers a library rescan.
     """
     sanitized = clean_query(query)
-    logger.info(f"Starting download job {job_id}: {sanitized} (raw: {query})")
-    update_download_job(job_id, status="running", progress="Starting spotDL...")
-    await broadcast_event("job_started", {"job_id": job_id, "query": sanitized})
+    cmd = build_download_cmd(query, sanitized)
+    is_ytdlp = cmd[0] == "yt-dlp"
+    engine_name = "YouTube Music" if is_ytdlp else "spotDL"
 
-    cmd = find_spotdl_binary() + [
-        sanitized,
-        "--output", SPOTDL_OUTPUT_TEMPLATE,
-        "--format", SPOTDL_AUDIO_FORMAT,
-        "--print-errors",
-    ]
+    logger.info(f"Starting download job {job_id} using {engine_name}: {sanitized}")
+    update_download_job(job_id, status="running", progress=f"Downloading via {engine_name}...")
+    await broadcast_event("job_started", {"job_id": job_id, "query": sanitized, "engine": engine_name})
 
     env = os.environ.copy()
     env["PATH"] = f"/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"

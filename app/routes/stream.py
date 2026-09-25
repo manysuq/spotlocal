@@ -3,6 +3,7 @@ import hashlib
 import mimetypes
 from pathlib import Path
 from typing import Optional
+import requests
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from app import database as db
@@ -93,12 +94,59 @@ def send_bytes_range_requests(
         raise HTTPException(status_code=400, detail="Invalid range request")
 
 
+def stream_remote_audio(stream_url: str, range_header: Optional[str]):
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+    }
+    if range_header:
+        req_headers["Range"] = range_header
+
+    try:
+        remote_resp = requests.get(stream_url, headers=req_headers, stream=True, timeout=12)
+    except Exception as e:
+        return None
+
+    if remote_resp.status_code >= 400:
+        remote_resp.close()
+        return None
+
+    status_code = remote_resp.status_code
+    content_type = remote_resp.headers.get("Content-Type", "audio/mp4")
+    response_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": content_type,
+    }
+    if "Content-Range" in remote_resp.headers:
+        response_headers["Content-Range"] = remote_resp.headers["Content-Range"]
+    if "Content-Length" in remote_resp.headers:
+        response_headers["Content-Length"] = remote_resp.headers["Content-Length"]
+
+    def iter_remote():
+        try:
+            for chunk in remote_resp.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        except (GeneratorExit, Exception):
+            pass
+        finally:
+            remote_resp.close()
+
+    return StreamingResponse(
+        iter_remote(),
+        status_code=status_code,
+        headers=response_headers,
+        media_type=content_type
+    )
+
+
 @router.get("/api/stream/online")
 async def stream_online(q: str, request: Request, artist: Optional[str] = None, title: Optional[str] = None):
     """
-    Streams full-length song audio directly for any online track (not 30-sec snippets).
+    Streams full-length song audio directly for any online track (never 30-sec snippets).
     If locally downloaded, streams from disk with byte-range seeking.
-    If online, resolves direct stream URL from YouTube Music/YouTube.
+    If online, resolves direct stream from YouTube Music/YouTube and proxies bytes directly to client.
     """
     # 1. Check local library
     search_term = title or q
@@ -113,9 +161,19 @@ async def stream_online(q: str, request: Request, artist: Optional[str] = None, 
 
     # 2. Resolve full-length online audio stream
     search_q = f"{artist} - {title}" if (artist and title) else q
+    range_hdr = request.headers.get("Range")
+
     stream_url = await resolve_online_stream_url(search_q)
     if stream_url:
-        return RedirectResponse(url=stream_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        resp = stream_remote_audio(stream_url, range_hdr)
+        if resp:
+            return resp
+        # If cached URL expired, retry once with force_refresh
+        fresh_url = await resolve_online_stream_url(search_q, force_refresh=True)
+        if fresh_url:
+            resp2 = stream_remote_audio(fresh_url, range_hdr)
+            if resp2:
+                return resp2
 
     raise HTTPException(status_code=404, detail="Audio stream not found")
 
