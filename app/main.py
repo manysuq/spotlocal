@@ -59,19 +59,30 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/")
 async def root():
     """Serves the main Spotify-like single-page web app."""
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html", 
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 
 @app.get("/manifest.json")
 async def manifest():
     """PWA Web App Manifest."""
-    return FileResponse(STATIC_DIR / "manifest.json", media_type="application/manifest+json")
+    return FileResponse(
+        STATIC_DIR / "manifest.json", 
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 
 @app.get("/sw.js")
 async def service_worker():
     """PWA Service Worker."""
-    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript")
+    return FileResponse(
+        STATIC_DIR / "sw.js", 
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 
 if __name__ == "__main__":
