@@ -344,8 +344,11 @@ def search_unified(query: str) -> Dict[str, Any]:
         top_result = {
             "type": "track",
             "name": local_tracks[0]["title"],
+            "title": local_tracks[0]["title"],
+            "artist": local_tracks[0]["artist"],
             "subtitle": f"Песня • {local_tracks[0]['artist']}",
             "picture": f"/api/covers/{local_tracks[0]['id']}",
+            "cover": f"/api/covers/{local_tracks[0]['id']}",
             "is_local": True,
             "track_id": local_tracks[0]["id"]
         }
@@ -353,9 +356,15 @@ def search_unified(query: str) -> Dict[str, Any]:
         top_result = {
             "type": "track",
             "name": online_tracks[0]["title"],
+            "title": online_tracks[0]["title"],
+            "artist": online_tracks[0]["artist"],
+            "album": online_tracks[0].get("album", ""),
+            "duration": online_tracks[0].get("duration", 0),
             "subtitle": f"Песня • {online_tracks[0]['artist']}",
             "picture": online_tracks[0]["cover"],
+            "cover": online_tracks[0]["cover"],
             "is_local": online_tracks[0]["is_local"],
+            "local_track_id": online_tracks[0].get("local_track_id"),
             "preview_url": online_tracks[0]["preview_url"]
         }
 

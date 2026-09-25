@@ -4,9 +4,10 @@ import mimetypes
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse
 from app import database as db
 from app.config import COVERS_DIR
+from app.downloader import resolve_online_stream_url
 
 router = APIRouter(tags=["Stream & Media"])
 
@@ -90,6 +91,33 @@ def send_bytes_range_requests(
         )
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid range request")
+
+
+@router.get("/api/stream/online")
+async def stream_online(q: str, request: Request, artist: Optional[str] = None, title: Optional[str] = None):
+    """
+    Streams full-length song audio directly for any online track (not 30-sec snippets).
+    If locally downloaded, streams from disk with byte-range seeking.
+    If online, resolves direct stream URL from YouTube Music/YouTube.
+    """
+    # 1. Check local library
+    search_term = title or q
+    if search_term:
+        matches = db.get_all_tracks(search=search_term, limit=5)
+        for m in matches:
+            if not artist or artist.lower() in m["artist"].lower() or m["artist"].lower() in artist.lower():
+                file_path = Path(m["filepath"])
+                if file_path.is_file():
+                    media_type = get_media_type(str(file_path))
+                    return send_bytes_range_requests(file_path, request.headers.get("Range"), media_type)
+
+    # 2. Resolve full-length online audio stream
+    search_q = f"{artist} - {title}" if (artist and title) else q
+    stream_url = await resolve_online_stream_url(search_q)
+    if stream_url:
+        return RedirectResponse(url=stream_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    raise HTTPException(status_code=404, detail="Audio stream not found")
 
 
 @router.get("/api/stream/{track_id}")

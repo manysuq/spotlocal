@@ -50,8 +50,12 @@ class PlayerEngine {
     });
 
     this.audio.addEventListener('error', (e) => {
-      console.error('Audio playback error:', e);
-      if (window.App) {
+      console.warn('Audio playback error on:', this.audio.src, e);
+      if (this.currentTrack?.preview_url && this.audio.src !== this.currentTrack.preview_url) {
+        console.log('Falling back to preview audio');
+        this.audio.src = this.currentTrack.preview_url;
+        this.audio.play().catch(() => {});
+      } else if (window.App) {
         window.App.showToast('Ошибка воспроизведения трека');
       }
     });
@@ -118,12 +122,11 @@ class PlayerEngine {
 
     this.currentTrack = track;
     const isOnline = !track.id || track.id <= 0 || !track.is_local;
-    if (track.preview_url && isOnline) {
-      this.audio.src = track.preview_url;
-    } else if (track.id && track.id > 0) {
+    if (isOnline) {
+      const qStr = `${track.artist} - ${track.title}`;
+      this.audio.src = `/api/stream/online?q=${encodeURIComponent(qStr)}&artist=${encodeURIComponent(track.artist || '')}&title=${encodeURIComponent(track.title || '')}`;
+    } else {
       this.audio.src = `/api/stream/${track.id}`;
-    } else if (track.preview_url) {
-      this.audio.src = track.preview_url;
     }
 
     this.audio.play().catch(err => {

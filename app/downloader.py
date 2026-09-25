@@ -15,11 +15,70 @@ from app.config import (
 from app.database import create_download_job, update_download_job, get_download_jobs
 from app.scanner import scan_library
 
+import re
+import time
+
 logger = logging.getLogger("spotlocal.downloader")
 
 # Active download subscribers (for SSE event streaming)
 _listeners: List[asyncio.Queue] = []
 _active_processes: Dict[str, asyncio.subprocess.Process] = {}
+_stream_url_cache: Dict[str, Any] = {}
+
+
+def clean_query(q: str) -> str:
+    """Sanitizes search query to prevent quote and symbol issues in Spotify/YouTube matching."""
+    if q.startswith("http://") or q.startswith("https://"):
+        return q.strip()
+    cleaned = re.sub(r'[«»""\'\(\)\[\]]', ' ', q)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+
+async def resolve_online_stream_url(query: str) -> Optional[str]:
+    """
+    Resolves a direct full-length audio stream URL via yt-dlp.
+    Caches stream URLs in-memory to ensure instantaneous repeat playback.
+    """
+    sanitized = clean_query(query)
+    cache_key = sanitized.lower()
+    now = time.time()
+    if cache_key in _stream_url_cache:
+        t, u = _stream_url_cache[cache_key]
+        if now - t < 7200:
+            return u
+
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "-g",
+        "-f", "ba[ext=m4a]/ba",
+        f"ytsearch1:{sanitized}"
+    ]
+    env = os.environ.copy()
+    env["PATH"] = f"/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=12.0)
+        if proc.returncode == 0 and stdout:
+            lines = stdout.decode().strip().split("\n")
+            for line in lines:
+                line = line.strip()
+                if line.startswith("http"):
+                    _stream_url_cache[cache_key] = (now, line)
+                    return line
+        else:
+            err_msg = stderr.decode(errors="replace") if stderr else f"returncode {proc.returncode}"
+            logger.warning(f"yt-dlp failed for '{query}': {err_msg}")
+    except Exception as e:
+        logger.warning(f"Error resolving full stream URL for '{query}': {e}")
+
+    return None
 
 
 async def broadcast_event(event_type: str, data: Dict[str, Any]):
@@ -45,17 +104,14 @@ def unregister_listener(queue: asyncio.Queue):
 
 def find_spotdl_binary() -> List[str]:
     """Finds spotdl executable or python module command."""
-    # Check if spotdl is in PATH
     spotdl_path = shutil.which("spotdl")
     if spotdl_path:
         return [spotdl_path]
 
-    # Check in current virtual environment bin directory
     venv_spotdl = os.path.join(os.path.dirname(sys.executable), "spotdl")
     if os.path.isfile(venv_spotdl):
         return [venv_spotdl]
 
-    # Fallback to python module execution
     return [sys.executable, "-m", "spotdl"]
 
 
@@ -64,18 +120,20 @@ async def run_spotdl_job(job_id: str, query: str):
     Executes spotdl download process in the background, captures stdout/stderr,
     updates database state, broadcasts SSE logs, and triggers a library rescan.
     """
-    logger.info(f"Starting download job {job_id}: {query}")
+    sanitized = clean_query(query)
+    logger.info(f"Starting download job {job_id}: {sanitized} (raw: {query})")
     update_download_job(job_id, status="running", progress="Starting spotDL...")
-    await broadcast_event("job_started", {"job_id": job_id, "query": query})
+    await broadcast_event("job_started", {"job_id": job_id, "query": sanitized})
 
     cmd = find_spotdl_binary() + [
-        query,
+        sanitized,
         "--output", SPOTDL_OUTPUT_TEMPLATE,
         "--format", SPOTDL_AUDIO_FORMAT,
         "--print-errors",
     ]
 
     env = os.environ.copy()
+    env["PATH"] = f"/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"
     if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET:
         env["SPOTIFY_CLIENT_ID"] = SPOTIFY_CLIENT_ID
         env["SPOTIFY_CLIENT_SECRET"] = SPOTIFY_CLIENT_SECRET
